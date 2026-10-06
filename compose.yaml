@@ -1,0 +1,21 @@
+services:
+  monopad:
+    build: .
+    container_name: monopad
+    restart: unless-stopped
+    network_mode: host
+    user: "${MONOPAD_UID:-1000}:${MONOPAD_GID:-1000}"
+    environment:
+      HOME: "${HOME}"
+      USER: "${USER}"
+      SHELL: /bin/bash
+      MONOPAD_HOST: 127.0.0.1
+      MONOPAD_PORT: 8787
+      MONOCODE_HOST_URL: http://127.0.0.1:3774
+    volumes:
+      - ./var/docker:/data
+      - ${HOME}/.monocode-host:/host-monocode
+      - ${HOME}:${HOME}
+      # MonoCode desktop's Codex CLI is installed outside HOME; expose only that runtime tree.
+      - /usr/lib/chatgpt:/usr/lib/chatgpt:ro
+    working_dir: /app

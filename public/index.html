@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#101317">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="MonoPad">
+  <meta name="description" content="Cliente privado para sessões MonoCode executadas no seu PC.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" href="/monocode.png">
+  <link rel="apple-touch-icon" href="/monocode.png">
+  <link rel="stylesheet" href="/vendor/xterm.css">
+  <link rel="stylesheet" href="/styles.css?v=49">
+  <title>MonoPad</title>
+</head>
+<body>
+  <div id="login" class="login-shell">
+    <section class="login-card">
+      <div class="monocode-logo" aria-hidden="true"><img src="/monocode.png" alt=""></div>
+      <p class="eyebrow">Acesso privado ao seu host</p>
+      <h1>MonoPad</h1>
+      <p>Suas sessões, ferramentas e credenciais continuam no PC. Este iPad recebe apenas a interface.</p>
+      <form id="login-form">
+        <label for="token">Chave de acesso</label>
+        <div class="token-row"><input id="token" name="token" type="password" autocomplete="current-password" placeholder="Cole a chave do MonoPad" required><button type="submit">Conectar</button></div>
+        <p id="login-error" class="form-error" role="alert"></p>
+      </form>
+      <button id="qr-login-button" type="button" class="qr-login-button"><span aria-hidden="true">▣</span> Vincular com QR Code</button>
+      <div id="qr-login" class="qr-login" hidden>
+        <div class="qr-login-header">
+          <div><p class="eyebrow">Vincular dispositivo</p><h2>Leia o QR Code</h2></div>
+          <button id="qr-close-button" type="button" class="icon-button" aria-label="Fechar leitor de QR Code"><span data-icon="x"></span></button>
+        </div>
+        <p class="qr-intro">Abra o MonoPad no PC e mostre o QR Code na tela. Suas sessões continuam no computador.</p>
+        <div id="qr-stage" class="qr-stage">
+          <video id="qr-video" playsinline muted></video>
+          <div class="qr-frame" aria-hidden="true"><i></i><i></i><i></i><i></i><span>Enquadre o código aqui</span></div>
+          <div id="qr-camera-placeholder" class="qr-camera-placeholder">
+            <div class="qr-camera-icon" aria-hidden="true">⌁</div>
+            <strong>Use a câmera do iPad</strong>
+            <span id="qr-placeholder-copy">Toque em “Abrir câmera” e fotografe o QR Code inteiro.</span>
+          </div>
+        </div>
+        <canvas id="qr-canvas" hidden></canvas>
+        <p id="qr-status" class="qr-status" role="status">Aponte a câmera para o QR Code.</p>
+        <ol class="qr-steps" aria-label="Como vincular">
+          <li><b>1</b><span>Abra o MonoPad no PC</span></li>
+          <li><b>2</b><span>Mostre o QR Code</span></li>
+          <li><b>3</b><span>Escaneie com o iPad</span></li>
+        </ol>
+        <div class="qr-actions">
+          <button id="qr-photo-button" type="button" class="qr-primary-button">Abrir câmera</button>
+          <button id="qr-manual-button" type="button" class="ghost-button">Usar chave manual</button>
+        </div>
+        <p class="qr-secure-note"><span aria-hidden="true">⌁</span> Em uma conexão HTTPS, o leitor ao vivo é ativado automaticamente.</p>
+      </div>
+      <input id="qr-photo-input" type="file" accept="image/*" capture="environment" hidden>
+    </section>
+  </div>
+
+  <div id="app" class="app-shell" hidden>
+    <header class="topbar">
+      <button id="sidebar-toggle" class="icon-button sidebar-toggle" aria-label="Ocultar projetos" title="Ocultar projetos" aria-expanded="true"><span data-icon="panelLeft"></span></button>
+      <div class="brand"><div class="monocode-logo small" aria-hidden="true"><img src="/monocode.png" alt=""></div><strong>MonoPad</strong></div>
+      <div class="host-pill"><i id="connection-dot"></i><span id="host-name">Conectando…</span></div>
+      <div class="topbar-actions">
+        <button id="install-button" class="ghost-button" hidden>Instalar</button>
+        <div class="view-menu">
+          <button id="view-menu-button" class="icon-button" type="button" aria-label="Mudar visualização" aria-expanded="false" title="Visualização"><span data-icon="dashboard"></span></button>
+          <div id="view-menu-popover" class="view-menu-popover" hidden>
+            <button type="button" data-view-tab="flow"><span data-icon="dashboard"></span>Fluxo</button>
+            <button type="button" data-view-tab="terminal"><span data-icon="terminal"></span>Terminal</button>
+            <button type="button" data-view-tab="details"><span data-icon="dot"></span>Detalhes</button>
+          </div>
+        </div>
+        <button id="settings-button" class="icon-button" aria-label="Abrir configurações" title="Configurações"><span data-icon="settings"></span></button>
+      </div>
+    </header>
+
+    <button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="Fechar projetos" tabindex="-1"></button>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-heading"><span>Workspace</span><button id="refresh" class="icon-button" aria-label="Atualizar"><span data-icon="refresh"></span></button></div>
+      <div class="workspace-nav" role="tablist" aria-label="Workspace">
+        <button class="workspace-nav-item active" data-workspace-view="sessions" role="tab" aria-selected="true">Sessões</button>
+        <button class="workspace-nav-item" data-workspace-view="explorer" role="tab" aria-selected="false">Explorer</button>
+        <button class="workspace-nav-item" data-workspace-view="changes" role="tab" aria-selected="false">Changes</button>
+      </div>
+      <nav id="project-list" class="workspace-view active" data-workspace-panel="sessions" aria-label="Projetos"></nav>
+      <section id="explorer-view" class="workspace-view explorer-view" data-workspace-panel="explorer" hidden aria-label="Explorer">
+        <div class="workspace-subbar"><button id="explorer-up" class="icon-button" aria-label="Subir pasta"><span data-icon="chevronLeft"></span></button><span id="explorer-path">Raiz do projeto</span><button id="explorer-refresh" class="icon-button" aria-label="Atualizar Explorer"><span data-icon="refresh"></span></button></div>
+        <div id="explorer-list" class="file-list"><div class="workspace-empty">Selecione uma sessão para explorar os arquivos do host.</div></div>
+      </section>
+      <section id="changes-view" class="workspace-view changes-view" data-workspace-panel="changes" hidden aria-label="Changes">
+        <div class="workspace-subbar"><span id="changes-branch">Alterações do projeto</span><button id="changes-refresh" class="icon-button" aria-label="Atualizar Changes"><span data-icon="refresh"></span></button></div>
+        <div id="changes-summary" class="changes-summary"></div>
+        <div id="changes-list" class="file-list"><div class="workspace-empty">Selecione uma sessão para ver as alterações.</div></div>
+      </section>
+      <footer><span>Execução no host</span><strong id="platform">—</strong></footer>
+    </aside>
+
+    <main class="workspace">
+      <section class="session-bar">
+        <div class="session-title"><p id="session-provider" class="eyebrow">Nenhuma sessão</p><h2 id="session-title">Selecione uma sessão</h2></div>
+        <div class="session-actions"><span id="session-status" class="status-pill neutral">Sem sessão</span><button id="delete-session" class="danger-button delete-session-button" type="button" disabled>Excluir</button><button id="interrupt" class="danger-button" disabled><span id="interrupt-label">Parar</span></button></div>
+      </section>
+
+      <section id="flow-panel" class="panel flow-panel">
+        <div id="transcript" class="transcript"><div class="empty-state"><div class="pulse-ring"></div><h3>Escolha uma sessão</h3><p>O fluxo mais recente aparecerá aqui e continuará mesmo se o iPad desconectar.</p></div></div>
+        <form id="composer" class="composer">
+          <div id="composer-menu" class="composer-menu" hidden>
+            <div class="composer-menu-grid">
+              <button id="attach-file" type="button" class="composer-menu-item"><span data-icon="file"></span><b>Importar arquivo</b><small>Escolher no iPad</small></button>
+            </div>
+            <div class="composer-menu-divider"></div>
+            <div class="composer-tools">
+            <button id="skills-button" type="button" class="composer-chip composer-skill-chip" disabled><span class="chip-icon" data-icon="sparkles"></span><span>Skills</span><span class="chip-chevron" data-icon="chevronDown"></span></button>
+            <button id="model-button" type="button" class="composer-chip" disabled><span class="chip-icon" data-icon="sparkles"></span><span id="model-label">Modelo</span><span class="chip-chevron" data-icon="chevronDown"></span></button>
+            <button id="effort-button" type="button" class="composer-chip" disabled><span class="chip-icon" data-icon="dashboard"></span><span id="effort-label">Esforço</span><span class="chip-chevron" data-icon="chevronDown"></span></button>
+            <button id="permission-button" type="button" class="composer-chip" disabled><span class="chip-icon" data-icon="dot"></span><span id="permission-label">Supervised</span><span class="chip-chevron" data-icon="chevronDown"></span></button>
+          </div>
+          </div>
+          <div id="model-picker" class="composer-popover model-picker" hidden>
+            <div class="picker-heading"><button type="button" class="picker-back" data-back-composer><span data-icon="chevronLeft"></span> Voltar</button><strong>Modelo</strong><button type="button" class="icon-button picker-close" data-close-picker="model-picker" aria-label="Fechar"><span data-icon="x"></span></button></div>
+            <input id="model-search" class="picker-search" type="search" placeholder="Buscar modelos" autocomplete="off">
+            <div id="model-options" class="picker-options"></div>
+          </div>
+          <div id="effort-picker" class="composer-popover settings-picker" hidden>
+            <div class="picker-heading"><button type="button" class="picker-back" data-back-composer><span data-icon="chevronLeft"></span> Voltar</button><strong>Configurações do modelo</strong><button type="button" class="icon-button picker-close" data-close-picker="effort-picker" aria-label="Fechar"><span data-icon="x"></span></button></div>
+            <div id="session-model-settings"></div>
+            <button id="apply-model-settings" type="button" class="picker-apply">Aplicar</button>
+          </div>
+          <div id="permission-picker" class="composer-popover permission-picker" hidden>
+            <div class="picker-heading"><button type="button" class="picker-back" data-back-composer><span data-icon="chevronLeft"></span> Voltar</button><strong>Permissões</strong><button type="button" class="icon-button picker-close" data-close-picker="permission-picker" aria-label="Fechar"><span data-icon="x"></span></button></div>
+            <div id="permission-options" class="picker-options"></div>
+          </div>
+          <div id="skills-picker" class="composer-popover skills-picker" hidden>
+            <div class="picker-heading"><button type="button" class="picker-back" data-back-composer><span data-icon="chevronLeft"></span> Voltar</button><strong>Skills do MonoCode</strong><button type="button" class="icon-button picker-close" data-close-picker="skills-picker" aria-label="Fechar"><span data-icon="x"></span></button></div>
+            <input id="skills-search" class="picker-search" type="search" placeholder="Buscar skills ou comandos" autocomplete="off">
+            <div id="skills-options" class="picker-options" role="listbox"></div>
+            <p class="picker-note">As instruções são carregadas no PC e aplicadas antes do agente receber o prompt.</p>
+          </div>
+          <div id="file-picker" class="composer-popover file-picker" hidden>
+            <div class="picker-heading"><button type="button" class="picker-back" data-back-composer><span data-icon="chevronLeft"></span> Voltar</button><strong>Arquivos do projeto</strong><button type="button" class="icon-button picker-close" data-close-picker="file-picker" aria-label="Fechar"><span data-icon="x"></span></button></div>
+            <input id="file-search" class="picker-search" type="search" placeholder="Buscar arquivo ou pasta" autocomplete="off">
+            <div id="file-options" class="picker-options" role="listbox"></div>
+            <p class="picker-note">Digite @ para referenciar um arquivo do workspace no prompt.</p>
+          </div>
+          <div id="attachment-list" class="attachment-list" hidden></div>
+          <input id="composer-file-input" type="file" accept="*/*" multiple hidden>
+          <textarea id="prompt" rows="1" placeholder="Pergunte, descreva uma tarefa ou use /skill…" disabled></textarea>
+          <div class="composer-foot"><button id="composer-plus" class="composer-plus-button" type="button" aria-label="Adicionar anexo ou configuração" aria-expanded="false"><span data-icon="plus"></span></button><span>⌘ Enter para enviar</span><div class="composer-actions"><button id="send" type="submit" disabled>Enviar</button></div></div>
+        </form>
+      </section>
+
+      <section id="terminal-panel" class="panel terminal-panel" hidden>
+        <div class="terminal-toolbar"><span id="terminal-cwd">Terminal do host</span><div><button id="terminal-reconnect" class="ghost-button">Reconectar</button><button id="terminal-stop" class="danger-button">Parar</button></div></div>
+        <div id="terminal"></div>
+      </section>
+
+      <section id="details-panel" class="panel details-panel" hidden>
+        <dl><div><dt>Projeto</dt><dd id="detail-project">—</dd></div><div><dt>Diretório</dt><dd id="detail-cwd">—</dd></div><div><dt>Branch / worktree</dt><dd id="detail-branch">—</dd></div><div><dt>Modelo</dt><dd id="detail-model">—</dd></div><div><dt>Permissões</dt><dd id="detail-mode">—</dd></div></dl>
+      </section>
+    </main>
+
+    <div id="settings" class="settings-shell" hidden>
+      <button id="settings-backdrop" class="settings-backdrop" aria-label="Fechar configurações"></button>
+      <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <header class="settings-header"><div><p class="eyebrow">Preferências do MonoPad</p><h2 id="settings-title">Configurações</h2></div><button id="settings-close" class="icon-button" aria-label="Fechar configurações"><span data-icon="x"></span></button></header>
+        <div class="settings-layout">
+          <nav class="settings-nav" aria-label="Categorias de configurações">
+            <p>App</p>
+            <button class="settings-nav-item active" data-settings-page="general"><span data-icon="dashboard"></span>Geral</button>
+            <button class="settings-nav-item" data-settings-page="appearance"><span data-icon="settings"></span>Aparência</button>
+            <button class="settings-nav-item" data-settings-page="keybindings"><span data-icon="dashboard"></span>Atalhos</button>
+            <p>Workspace</p>
+            <button class="settings-nav-item" data-settings-page="inbox"><span data-icon="dashboard"></span>Inbox</button>
+            <button class="settings-nav-item" data-settings-page="archive"><span data-icon="folder"></span>Arquivo</button>
+            <button class="settings-nav-item" data-settings-page="worktrees"><span data-icon="folder"></span>Worktrees</button>
+            <p>Agentes</p>
+            <button class="settings-nav-item" data-settings-page="agents"><span data-icon="sparkles"></span>Agentes</button>
+          </nav>
+          <div class="settings-content">
+            <section class="settings-page active" data-settings-panel="general"><h3>Geral</h3><p class="settings-lead">Ajuste o comportamento do MonoPad neste dispositivo.</p>
+              <label class="setting-row"><span><b>Abrir última sessão</b><small>Retoma automaticamente a última conversa selecionada.</small></span><input type="checkbox" data-setting="openLastSession"></label>
+              <label class="setting-row"><span><b>Atualização automática</b><small>Atualiza o fluxo enquanto o agente trabalha.</small></span><input type="checkbox" data-setting="autoRefresh"></label>
+              <label class="setting-row"><span><b>Confirmar interrupção</b><small>Pede confirmação antes de parar um agente.</small></span><input type="checkbox" data-setting="confirmInterrupt"></label>
+              <label class="setting-row"><span><b>Manter sessão neste dispositivo</b><small>Reabre o MonoPad conectado mesmo depois de fechar o app ou o Safari.</small></span><input type="checkbox" data-setting="persistLogin"></label>
+              <div class="settings-info session-security-info"><strong>Sessão atual protegida</strong><span>O token fica somente neste dispositivo. Use “Sair” quando quiser removê-lo.</span><button id="logout-button" class="logout-button" type="button">Sair deste dispositivo</button></div>
+            </section>
+            <section class="settings-page" data-settings-panel="appearance"><h3>Aparência</h3><p class="settings-lead">Estas preferências valem somente para o MonoPad.</p>
+              <div class="setting-select"><span><b>Tema</b><small>Não altera o tema do MonoCode no PC.</small></span><select data-setting="theme"><option value="dark">Escuro</option><option value="light">Claro</option><option value="system">Automático</option></select></div>
+              <div class="setting-select"><span><b>Densidade</b><small>Espaçamento da lista de projetos e do fluxo.</small></span><select data-setting="density"><option value="comfortable">Confortável</option><option value="compact">Compacta</option></select></div>
+              <label class="setting-row"><span><b>Reduzir animações</b><small>Melhora a acessibilidade e economiza bateria.</small></span><input type="checkbox" data-setting="reduceMotion"></label>
+            </section>
+            <section class="settings-page" data-settings-panel="keybindings"><h3>Atalhos</h3><p class="settings-lead">Atalhos úteis no teclado e no teclado externo do iPad.</p><div class="shortcut-row"><span>Enviar instrução</span><kbd>⌘</kbd><kbd>Enter</kbd></div><div class="shortcut-row"><span>Interromper agente</span><kbd>Esc</kbd></div><div class="shortcut-row"><span>Abrir configurações</span><kbd>⌘</kbd><kbd>,</kbd></div></section>
+            <section class="settings-page" data-settings-panel="inbox"><h3>Inbox</h3><p class="settings-lead">A caixa de entrada reúne sessões que precisam da sua atenção.</p><div class="settings-info"><strong id="inbox-count">0 itens aguardando resposta</strong><span>O status é lido diretamente do host MonoCode.</span></div></section>
+            <section class="settings-page" data-settings-panel="archive"><h3>Arquivo</h3><p class="settings-lead">Sessões arquivadas ficam fora da lista principal.</p><div class="settings-info"><strong id="archive-count">0 sessões arquivadas</strong><span>O gerenciamento completo do arquivo continuará no host.</span></div></section>
+            <section class="settings-page" data-settings-panel="worktrees"><h3>Worktrees</h3><p class="settings-lead">Confira o worktree usado pela sessão selecionada.</p><div class="settings-info"><strong id="worktree-path">Nenhum worktree selecionado</strong><span>O terminal e os agentes continuam executando no PC.</span></div></section>
+            <section class="settings-page" data-settings-panel="agents"><h3>Agentes</h3><p class="settings-lead">Os agentes instalados e suas autenticações continuam no PC.</p><div class="settings-info"><strong id="agent-providers">Detectando provedores…</strong><span>O MonoPad não copia credenciais nem altera configurações do MonoCode.</span></div></section>
+            <footer class="settings-footer"><button id="settings-reset" class="ghost-button">Restaurar padrões</button><span>Preferências salvas neste navegador</span></footer>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div id="new-session-modal" class="overlay-shell" hidden>
+      <button id="new-session-backdrop" class="overlay-backdrop" aria-label="Fechar nova sessão"></button>
+      <section class="new-session-card" role="dialog" aria-modal="true" aria-labelledby="new-session-title">
+        <header class="overlay-header"><div><p class="eyebrow">Nova conversa no host</p><h2 id="new-session-title">Escolha a IA</h2></div><button id="new-session-close" class="icon-button" type="button" aria-label="Fechar"><span data-icon="x"></span></button></header>
+        <p id="new-session-project" class="overlay-lead">Selecione o provedor e as configurações antes de iniciar.</p>
+        <label for="new-session-provider">Provedor</label><select id="new-session-provider" class="full-select"></select>
+        <label for="new-session-model">Modelo</label><select id="new-session-model" class="full-select"></select>
+        <div id="new-session-settings" class="new-session-settings"></div>
+        <label for="new-session-mode">Permissões</label><select id="new-session-mode" class="full-select"><option value="supervised">Supervised</option><option value="auto-accept-edits">Auto-accept edits</option><option value="auto">Auto</option><option value="full-access">Full access</option></select>
+        <div class="overlay-actions"><button id="new-session-cancel" class="ghost-button" type="button">Cancelar</button><button id="new-session-create" type="button">Criar sessão</button></div>
+      </section>
+    </div>
+    <div id="project-style-modal" class="overlay-shell" hidden>
+      <button id="project-style-backdrop" class="overlay-backdrop" aria-label="Fechar personalização do projeto"></button>
+      <section class="new-session-card project-style-card" role="dialog" aria-modal="true" aria-labelledby="project-style-title">
+        <header class="overlay-header"><div><p class="eyebrow">Identidade do projeto</p><h2 id="project-style-title">Personalizar projeto</h2></div><button id="project-style-close" class="icon-button" type="button" aria-label="Fechar"><span data-icon="x"></span></button></header>
+        <p id="project-style-name" class="overlay-lead">Escolha uma cor e um ícone para este projeto no MonoPad.</p>
+        <label for="project-style-color">Cor do projeto</label>
+        <div class="project-color-control"><input id="project-style-color" type="color" value="#ffb454"><span>Aplica somente ao MonoPad.</span></div>
+        <label>Ícone ou emoji</label>
+        <div id="project-style-icons" class="project-style-icons" role="listbox" aria-label="Ícone do projeto"></div>
+        <div class="overlay-actions"><button id="project-style-cancel" class="ghost-button" type="button">Cancelar</button><button id="project-style-save" type="button">Salvar</button></div>
+      </section>
+    </div>
+    <div id="file-viewer" class="file-viewer-screen" hidden>
+      <section class="file-viewer-card file-viewer-document" role="dialog" aria-modal="true" aria-labelledby="file-viewer-title">
+        <header class="file-viewer-header">
+          <button id="file-viewer-close" class="file-viewer-back ghost-button" type="button" aria-label="Voltar para o workspace"><span data-icon="chevronLeft"></span><span>Voltar</span></button>
+          <div class="file-viewer-heading"><p class="eyebrow" id="file-viewer-meta">Arquivo</p><h2 id="file-viewer-title">—</h2></div>
+          <div class="file-viewer-actions"><label class="file-viewer-search"><span data-icon="search"></span><input id="file-viewer-search" type="search" placeholder="Pesquisar" autocomplete="off" aria-label="Pesquisar no arquivo"></label><button id="file-viewer-preview" class="ghost-button" type="button" hidden>Pré-visualizar</button></div>
+        </header>
+        <div class="file-viewer-body"><div class="file-editor-pane"><div id="file-viewer-gutter" class="file-viewer-gutter" aria-hidden="true"></div><pre id="file-viewer-content" class="file-viewer-content"></pre></div><article id="file-viewer-preview-pane" class="file-viewer-preview markdown-preview" hidden></article></div>
+        <footer class="file-viewer-footer"><span id="file-viewer-position">Ln 1</span><span id="file-viewer-language">Texto</span></footer>
+      </section>
+    </div>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </div>
+  <script src="/vendor/xterm.js"></script>
+  <script src="/vendor/xterm-addon-fit.js"></script>
+  <script src="/vendor/jsQR.js"></script>
+  <script type="module" src="/app.js?v=49"></script>
+</body>
+</html>

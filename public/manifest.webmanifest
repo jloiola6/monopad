@@ -1,0 +1,10 @@
+{
+  "name": "MonoPad — MonoCode remoto",
+  "short_name": "MonoPad",
+  "description": "Controle privado do MonoCode executado no seu PC.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101317",
+  "theme_color": "#101317",
+  "icons": [{ "src": "/monocode.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable" }]
+}

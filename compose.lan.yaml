@@ -1,0 +1,4 @@
+services:
+  monopad:
+    environment:
+      MONOPAD_HOST: 0.0.0.0
