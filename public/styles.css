@@ -520,11 +520,14 @@ html[data-theme="light"] .composer-plus-button { background:#f3f5f7; border-colo
 }
 
 /* Final iPad layout polish */
-.markdown-preview table { width:100%; border-collapse:separate; border-spacing:0; margin:1em 0; overflow:hidden; border:1px solid #343d47; border-radius:10px; font-size:.92em; }
-.markdown-preview th, .markdown-preview td { padding:9px 11px; border-right:1px solid #343d47; border-bottom:1px solid #343d47; text-align:left; vertical-align:top; }
-.markdown-preview th { color:#fff; background:#20262d; font-weight:750; }
+.markdown-table-wrap { max-width:100%; margin:1em 0; overflow-x:auto; overflow-y:hidden; border:1px solid #343d47; border-radius:10px; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
+.markdown-preview table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; margin:0; table-layout:auto; font-size:.92em; }
+.markdown-preview th, .markdown-preview td { min-width:180px; padding:10px 12px; border-right:1px solid #343d47; border-bottom:1px solid #343d47; text-align:left; vertical-align:top; white-space:normal; word-break:normal; overflow-wrap:anywhere; hyphens:none; }
+.markdown-preview th:first-child, .markdown-preview td:first-child { min-width:72px; width:1%; white-space:nowrap; overflow-wrap:normal; }
+.markdown-preview th { position:sticky; top:0; z-index:1; color:#fff; background:#20262d; font-weight:750; }
+.markdown-preview tbody tr:nth-child(even) { background:#ffffff03; }
+.markdown-preview tbody tr:hover { background:#ffffff08; }
 .markdown-preview tr:last-child td { border-bottom:0; }.markdown-preview th:last-child, .markdown-preview td:last-child { border-right:0; }
-.markdown-table-wrap { max-width:100%; overflow:auto; }
 .composer-menu { width:min(320px,calc(100vw - 24px)); max-width:320px; }
 .composer-menu-grid { grid-template-columns:1fr; }
 .composer-menu-item { min-height:52px; grid-template-columns:30px 1fr; }
