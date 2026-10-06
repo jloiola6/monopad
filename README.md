@@ -45,6 +45,30 @@ A opção **Manter sessão neste dispositivo** também fica nas configurações 
 
 Leia [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para as decisões, limites e roadmap.
 
+## Compatibilidade
+
+### Linux — suporte principal
+
+O fluxo completo é suportado em Linux, desde que a máquina tenha Docker com Compose, Tailscale conectado e o MonoCode desktop instalado e autenticado:
+
+```bash
+git clone https://github.com/jloiola6/monopad.git
+cd monopad
+./start.sh
+```
+
+O clone não inclui tokens, banco local, `node_modules` nem credenciais de provedores. Cada máquina precisa ter o próprio MonoCode desktop, seus projetos e suas autenticações locais.
+
+### Windows — use WSL2
+
+O uso nativo pelo PowerShell ainda não é suportado. Os scripts atuais usam Bash, caminhos Linux, `${HOME}`, UID/GID de Linux e `network_mode: host`; a sincronização de sessões também usa o caminho Linux do banco do MonoCode.
+
+Para usar no Windows, utilize WSL2 com Docker Desktop em modo **Linux containers**. O Tailscale e o MonoCode desktop precisam estar acessíveis no ambiente em que o MonoPad for executado. Ainda faltam um fluxo PowerShell, volumes nativos do Windows e a detecção do banco em `%LOCALAPPDATA%` para considerar o Windows nativo oficialmente suportado.
+
+### macOS
+
+O uso com Docker Desktop e Tailscale pode funcionar, mas ainda não foi validado oficialmente. O comportamento de `network_mode: host`, volumes e sincronização do banco deve ser conferido na máquina antes de usar em produção.
+
 ## Início automático com Docker
 
 Pré-requisitos: apenas Docker e Tailscale conectado no PC e no iPad. A imagem inclui uma versão oficial fixada do MonoCode Host. Não é necessário instalar o host, criar `.env`, copiar token ou parear o iPad manualmente.
