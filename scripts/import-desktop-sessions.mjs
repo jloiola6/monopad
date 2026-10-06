@@ -94,7 +94,7 @@ let mirrored = 0;
 try {
   const projects = new Map(host.prepare("SELECT id,cwd FROM projects").all().map((row) => [String(row.id), row]));
   const hostRows = host.prepare("SELECT id,project_id,snapshot FROM sessions").all();
-  const existingDesktop = desktop.prepare("SELECT id,updated_at,provider_session_id FROM sessions WHERE id=?");
+  const existingDesktop = desktop.prepare("SELECT id,updated_at,provider_session_id,blocks_json FROM sessions WHERE id=?");
   const insertDesktop = desktop.prepare(`INSERT INTO sessions (
     id,cwd,harness,model,model_settings,runtime_mode,title,provider_session_id,blocks_json,
     created_at,updated_at,branch,context_used,context_window,archived,worktree_cwd,
@@ -135,7 +135,19 @@ try {
         mirrored += 1;
         continue;
       }
-      if (active.has(String(session.id)) || Number(existing.updated_at || 0) >= updatedAt) continue;
+      if (active.has(String(session.id))) continue;
+      let desktopBlocks = [];
+      try { desktopBlocks = JSON.parse(String(existing.blocks_json || "[]")); } catch {}
+      const hostBlockIds = new Set(blocks.map((block, index) => String(block?.id || `index:${index}`)));
+      const desktopBlockIds = new Set((Array.isArray(desktopBlocks) ? desktopBlocks : []).map((block, index) => String(block?.id || `index:${index}`)));
+      const hostHasNewBlocks = [...hostBlockIds].some((id) => !desktopBlockIds.has(id));
+      const blocksDiffer = JSON.stringify(desktopBlocks) !== JSON.stringify(blocks);
+      const hostIsMoreComplete = blocks.length > desktopBlocks.length || hostHasNewBlocks;
+      const hostIsNewer = Number(existing.updated_at || 0) < updatedAt;
+      if (!blocksDiffer || (!hostIsMoreComplete && !hostIsNewer)) continue;
+      // Keep the desktop sort order when its metadata timestamp is newer but
+      // the Host contains the more complete conversation history.
+      values[9] = Math.max(Number(existing.updated_at || 0), updatedAt);
       updateDesktop.run(...values, String(session.id));
       mirrored += 1;
     }

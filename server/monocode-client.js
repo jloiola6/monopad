@@ -37,7 +37,10 @@ async function syncDesktopSessions(removedSessionId = "") {
     const args = ["scripts/import-desktop-sessions.mjs"];
     if (removedSessionId) args.push("--delete-session", String(removedSessionId));
     await execFileAsync(process.execPath, args, { cwd: process.cwd(), timeout: 8_000 });
-  } catch { /* the host remains usable when the desktop database is locked */ }
+  } catch (error) {
+    // The Host must remain usable when MonoCode desktop has the SQLite file locked.
+    console.error(`MonoPad: desktop session sync skipped: ${error.message}`);
+  }
 }
 
 
@@ -156,6 +159,18 @@ export class MonoCodeClient {
     this.projectDiscovery = projectDiscovery;
     this.environmentId = null;
     this.demoSessions = new Map();
+    this.lastDesktopSyncAt = 0;
+    this.desktopSyncPromise = null;
+  }
+
+  async mirrorDesktopSessions({ force = false, removedSessionId = "" } = {}) {
+    if (this.demo) return;
+    const now = Date.now();
+    if (!force && this.desktopSyncPromise) return this.desktopSyncPromise;
+    if (!force && now - this.lastDesktopSyncAt < 1_000) return;
+    this.lastDesktopSyncAt = now;
+    this.desktopSyncPromise = syncDesktopSessions(removedSessionId).finally(() => { this.desktopSyncPromise = null; });
+    return this.desktopSyncPromise;
   }
 
   async rpc(method, params = {}) {
@@ -176,7 +191,10 @@ export class MonoCodeClient {
     });
     const payload = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
     if (!response.ok || payload.error) throw new Error(payload.error || `MonoCode Host returned HTTP ${response.status}`);
-    if (method === "sessions.delete" && params.sessionId) await syncDesktopSessions(params.sessionId);
+    if (method === "sessions.delete" && params.sessionId) await this.mirrorDesktopSessions({ force: true, removedSessionId: params.sessionId });
+    // A dispatch returns before the provider finishes. Polling sessions.sync is
+    // the reliable point to mirror the completed history into MonoCode desktop.
+    if (method === "sessions.sync") await this.mirrorDesktopSessions();
     return payload.result;
   }
 
@@ -237,12 +255,12 @@ export class MonoCodeClient {
       delete outgoing.harness;
     }
     const result = await this.rpc("commands.dispatch", { type, commandId: randomUUID(), ...outgoing });
-    if (!this.demo) await syncDesktopSessions();
+    await this.mirrorDesktopSessions({ force: true });
     return result;
   }
 
   async bootstrap() {
-    await syncDesktopSessions();
+    await this.mirrorDesktopSessions({ force: true });
     const environment = await this.describe();
     let projects = await this.rpc("projects.list");
     // The desktop keeps its project rail in local storage while the remote
