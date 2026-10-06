@@ -75,10 +75,38 @@ try {
       const result = insertSession.run(String(row.id), String(project.id), serialized);
       if (result.changes) imported += 1;
     } else {
-      try {
-        const current = JSON.parse(String(existing.snapshot));
-        if (!current.blockRevisions) { updateSession.run(String(project.id), serialized, String(row.id)); imported += 1; }
-      } catch { updateSession.run(String(project.id), serialized, String(row.id)); imported += 1; }
+      let current;
+      try { current = JSON.parse(String(existing.snapshot)); } catch { current = null; }
+      const currentBlocks = Array.isArray(current?.session?.blocks) ? current.session.blocks : [];
+      const currentIds = new Set(currentBlocks.map((block, index) => String(block?.id || `index:${index}`)));
+      const desktopIds = new Set(blocks.map((block, index) => String(block?.id || `index:${index}`)));
+      const desktopHasNewBlocks = [...desktopIds].some((id) => !currentIds.has(id));
+      const hostHasNewBlocks = [...currentIds].some((id) => !desktopIds.has(id));
+      const blocksDiffer = JSON.stringify(currentBlocks) !== JSON.stringify(blocks);
+      const desktopMoreComplete = blocks.length > currentBlocks.length || desktopHasNewBlocks;
+      const desktopIsNewer = updatedAt > Number(current?.updatedAt || 0);
+      const desktopWins = desktopMoreComplete ||
+        (desktopIsNewer && !hostHasNewBlocks && blocks.length >= currentBlocks.length);
+      const safeToReplace = !active.has(String(row.id)) && current?.status !== "running";
+      if (!current || !current.blockRevisions || (safeToReplace && blocksDiffer && desktopWins)) {
+        const revision = Math.max(0, Number(current?.revision) || 0) + 1;
+        const nextSnapshot = current && current.blockRevisions
+          ? {
+              ...current,
+              projectId: String(project.id),
+              revision,
+              status: active.has(String(row.id)) ? "running" : "idle",
+              createdAt: Number(current.createdAt || row.created_at) || updatedAt,
+              updatedAt: Math.max(Number(current.updatedAt || 0), updatedAt),
+              archived: Boolean(row.archived),
+              pinned: Boolean(row.pinned),
+              blockRevisions: Object.fromEntries(blocks.map((block) => [String(block.id), revision])),
+              session: { ...current.session, ...snapshot.session },
+            }
+          : snapshot;
+        updateSession.run(String(project.id), JSON.stringify(nextSnapshot), String(row.id));
+        imported += 1;
+      }
     }
   }
   host.exec("COMMIT");

@@ -3,6 +3,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 WORKDIR /src/monocode
 ARG MONOCODE_COMMIT=98da85ae7c2b44c2f2427c17b381433ef4f23ea9
 RUN git clone --filter=blob:none https://github.com/hardbeat920/monocode.git . && git checkout "$MONOCODE_COMMIT"
+COPY scripts/patch-monocode-host.mjs /tmp/patch-monocode-host.mjs
+RUN node /tmp/patch-monocode-host.mjs
 RUN npm ci && npm run host:build
 
 FROM node:24-bookworm-slim AS dependencies

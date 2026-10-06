@@ -1,0 +1,21 @@
+import { readFileSync, writeFileSync } from "node:fs";
+
+const file = process.env.MONOCODE_HOST_STORE || "/src/monocode/host/store.ts";
+const source = readFileSync(file, "utf8");
+const oldImport = 'import { dirname, join } from "node:path";';
+const newImport = `${oldImport}\nimport { statSync } from "node:fs";`;
+if (source.split(oldImport).length - 1 !== 1) throw new Error("MonoCode Host store import anchor changed");
+let next = source.replace(oldImport, newImport);
+const oldFields = `  private cache = new Map<string, HostSession>();\n\n  constructor(path: string) {\n    this.attachmentDir = join(dirname(path), "attachments");`;
+const newFields = `  private cache = new Map<string, HostSession>();\n  private readonly databasePath: string;\n  private databaseCacheSignature = "";\n\n  private databaseSignature(): string {\n    return [this.databasePath, \`\${this.databasePath}-wal\`, \`\${this.databasePath}-shm\`]\n      .map((file) => {\n        try {\n          const stat = statSync(file);\n          return \`\${file}:\${stat.mtimeMs}:\${stat.size}\`;\n        } catch {\n          return \`\${file}:missing\`;\n        }\n      })\n      .join("|");\n  }\n\n  private refreshExternalChanges(): void {\n    const signature = this.databaseSignature();\n    if (this.databaseCacheSignature && signature !== this.databaseCacheSignature)\n      this.cache.clear();\n    this.databaseCacheSignature = signature;\n  }\n\n  constructor(path: string) {\n    this.databasePath = path;\n    this.attachmentDir = join(dirname(path), "attachments");`;
+if (next.split(oldFields).length - 1 !== 1) throw new Error("MonoCode Host cache anchor changed");
+next = next.replace(oldFields, newFields);
+const oldDbInit = `    this.db = new DatabaseSync(path);\n    this.db`;
+const newDbInit = `    this.db = new DatabaseSync(path);\n    this.databaseCacheSignature = this.databaseSignature();\n    this.db`;
+if (next.split(oldDbInit).length - 1 !== 1) throw new Error("MonoCode Host database anchor changed");
+next = next.replace(oldDbInit, newDbInit);
+const oldFind = `  private find(id: string): HostSession | undefined {\n    const cached = this.cache.get(id);`;
+const newFind = `  private find(id: string): HostSession | undefined {\n    this.refreshExternalChanges();\n    const cached = this.cache.get(id);`;
+if (next.split(oldFind).length - 1 !== 1) throw new Error("MonoCode Host find anchor changed");
+next = next.replace(oldFind, newFind);
+writeFileSync(file, next);
