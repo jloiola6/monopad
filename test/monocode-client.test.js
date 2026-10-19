@@ -17,6 +17,25 @@ test("bootstraps live projects and filters deleted worktrees", async () => {
   assert.equal(calls[1].environmentId,"host-1");
 });
 
+
+test("shows only projects registered by MonoCode", async () => {
+  const cwd = process.cwd();
+  const unapproved = mkdtempSync(join(tmpdir(), "monopad-unapproved-project-"));
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    let result;
+    if (body.method === "environment.describe") result = { protocolVersion: 1, environmentId: "host-1", name: "PC", providers: ["codex"], capabilities: ["sessions"] };
+    else if (body.method === "projects.list") result = [{ id: "approved", name: "approved", cwd }, { id: "unapproved", name: "unapproved", cwd: unapproved }];
+    else if (body.method === "sessions.list") result = [];
+    return { ok: true, json: async () => ({ result }) };
+  };
+  try {
+    const client = new MonoCodeClient({ baseUrl: "http://127.0.0.1:3774", token: "x".repeat(43), fetchImpl, projectDiscovery: () => [cwd] });
+    const value = await client.bootstrap();
+    assert.deepEqual(value.projects.map((project) => project.id), ["approved"]);
+  } finally { rmSync(unapproved, { recursive: true, force: true }); }
+});
+
 test("registers a project created after the first host refresh", async () => {
   const cwd=process.cwd();
   let opened=false;

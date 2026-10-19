@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -126,32 +127,33 @@ function injectSkillPrompt(text, skills) {
   return `${header}\n\n${bodies}\n\n---\n\n${text}`;
 }
 
-function discoverLocalProjects() {
+function discoverMonoCodeProjects() {
+  const desktopPath = process.env.MONOCODE_DESKTOP_DB || join(homedir(), ".local", "share", "com.monocode.desktop", "monocode.db");
+  if (!existsSync(desktopPath)) return [];
+  let desktop;
+  try { desktop = new DatabaseSync(desktopPath); } catch { return []; }
   const found = new Set();
-  const home = homedir();
-  const roots = [join(home, "Documentos", "Projetos"), join(home, "Documents", "Projects"), join(home, "Projects")];
-  for (const root of roots) {
-    try {
-      for (const entry of readdirSync(root, { withFileTypes: true })) {
-        if (entry.isDirectory()) found.add(join(root, entry.name));
-      }
-    } catch { /* optional folder */ }
-  }
-  const localStorage = join(home, ".local", "share", "com.monocode.desktop", "localstorage", "tauri_localhost_0.localstorage");
+  const add = (value) => {
+    const cwd = String(value || "").trim();
+    if (!cwd.startsWith("/")) return;
+    try { if (statSync(cwd).isDirectory()) found.add(cwd); } catch { /* stale desktop entry */ }
+  };
   try {
-    const text = readFileSync(localStorage).toString("utf16le");
-    for (const match of text.matchAll(/\/home\/[^"\0]+/g)) {
-      const cwd = match[0].replace(/[}\]]+$/, "");
-      if (cwd.includes("/Projetos/") || cwd.includes("/Projects/")) found.add(cwd);
+    for (const row of desktop.prepare("SELECT DISTINCT cwd FROM sessions WHERE cwd IS NOT NULL").all()) add(row.cwd);
+    for (const row of desktop.prepare("SELECT snapshot_json FROM workspace_snapshot ORDER BY updated_at DESC LIMIT 1").all()) {
+      let snapshot;
+      try { snapshot = JSON.parse(String(row.snapshot_json || "{}")); } catch { continue; }
+      add(snapshot.projectCwd);
+      for (const target of Array.isArray(snapshot.projectReturnTargets) ? snapshot.projectReturnTargets : []) add(target?.projectPath);
+      for (const terminal of Array.isArray(snapshot.projectTerminals) ? snapshot.projectTerminals : []) add(terminal?.projectPath);
     }
-  } catch { /* desktop storage is optional */ }
-  return [...found].filter((cwd) => {
-    try { return existsSync(cwd) && statSync(cwd).isDirectory(); } catch { return false; }
-  });
+  } catch { /* desktop schema is optional */ }
+  try { desktop.close(); } catch {}
+  return [...found];
 }
 
 export class MonoCodeClient {
-  constructor({ baseUrl, token, demo = false, fetchImpl = fetch, projectDiscovery = discoverLocalProjects }) {
+  constructor({ baseUrl, token, demo = false, fetchImpl = fetch, projectDiscovery = discoverMonoCodeProjects }) {
     this.baseUrl = baseUrl;
     this.token = token;
     this.fetch = fetchImpl;
@@ -263,17 +265,24 @@ export class MonoCodeClient {
     await this.mirrorDesktopSessions({ force: true });
     const environment = await this.describe();
     let projects = await this.rpc("projects.list");
-    // The desktop keeps its project rail in local storage while the remote
-    // host keeps a separate registry. Reconcile local folders on every refresh
-    // so a project created after Docker started appears without a restart.
+    // MonoCode desktop is the source of truth for the workspace rail. Do not
+    // scan the user's project folders: a directory on disk is not necessarily
+    // an open/registered MonoCode project. The workspace snapshot also covers
+    // projects that have no session yet.
+    let desktopProjects = [];
     if (!this.demo) {
-      const registered = new Set(projects.map((project) => String(project.cwd || "")));
-      let opened = false;
-      for (const cwd of this.projectDiscovery()) {
-        if (registered.has(cwd)) continue;
-        try { await this.rpc("projects.open", { cwd }); registered.add(cwd); opened = true; } catch { /* stale/non-directory entry */ }
+      try { desktopProjects = this.projectDiscovery().filter((cwd) => typeof cwd === "string" && cwd); } catch { desktopProjects = []; }
+      if (desktopProjects.length) {
+        const allowed = new Set(desktopProjects);
+        const registered = new Set(projects.map((project) => String(project.cwd || "")));
+        let opened = false;
+        for (const cwd of desktopProjects) {
+          if (registered.has(cwd)) continue;
+          try { await this.rpc("projects.open", { cwd }); opened = true; } catch { /* stale/non-directory entry */ }
+        }
+        if (opened) projects = await this.rpc("projects.list");
+        projects = projects.filter((project) => allowed.has(String(project.cwd || "")));
       }
-      if (opened) projects = await this.rpc("projects.list");
     }
     // A deleted project/worktree can remain in the Host history by design.
     // It must not remain in the live workspace rail after a refresh.
