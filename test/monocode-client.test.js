@@ -9,7 +9,7 @@ test("bootstraps live projects and filters deleted worktrees", async () => {
   const calls=[];
   const cwd=process.cwd();
   const fetchImpl=async(_url,options)=>{const body=JSON.parse(options.body);calls.push(body);let result;if(body.method==="environment.describe")result={protocolVersion:1,environmentId:"host-1",name:"PC",providers:["codex"],capabilities:["sessions"]};else if(body.method==="projects.list")result=[{id:"p1",name:"app",cwd},{id:"stale",name:"old",cwd:"/definitely/not/there"}];else if(body.method==="sessions.list")result=body.params.projectId==="p1"?[{id:"s1",title:"Task",status:"idle",cwd},{id:"deleted",title:"Deleted",status:"idle",cwd:"/definitely/not/there"}]:[];return {ok:true,json:async()=>({result})};};
-  const client=new MonoCodeClient({baseUrl:"http://127.0.0.1:3774",token:"x".repeat(43),fetchImpl,projectDiscovery:()=>[]});
+  const client=new MonoCodeClient({baseUrl:"http://127.0.0.1:3774",token:"x".repeat(43),fetchImpl,projectDiscovery:()=>[cwd]});
   const value=await client.bootstrap();
   assert.equal(value.environment.name,"PC");
   assert.deepEqual(value.projects.map((project)=>project.id),["p1"]);
@@ -17,6 +17,21 @@ test("bootstraps live projects and filters deleted worktrees", async () => {
   assert.equal(calls[1].environmentId,"host-1");
 });
 
+
+test("does not fall back to the Host project registry", async () => {
+  const cwd = process.cwd();
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    let result;
+    if (body.method === "environment.describe") result = { protocolVersion: 1, environmentId: "host-1", name: "PC", providers: ["codex"], capabilities: ["sessions"] };
+    else if (body.method === "projects.list") result = [{ id: "stale-host-project", name: "stale-host-project", cwd }];
+    else if (body.method === "sessions.list") result = [];
+    return { ok: true, json: async () => ({ result }) };
+  };
+  const client = new MonoCodeClient({ baseUrl: "http://127.0.0.1:3774", token: "x".repeat(43), fetchImpl, projectDiscovery: () => [] });
+  const value = await client.bootstrap();
+  assert.deepEqual(value.projects, []);
+});
 
 test("shows only projects registered by MonoCode", async () => {
   const cwd = process.cwd();

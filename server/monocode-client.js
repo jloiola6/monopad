@@ -272,17 +272,18 @@ export class MonoCodeClient {
     let desktopProjects = [];
     if (!this.demo) {
       try { desktopProjects = this.projectDiscovery().filter((cwd) => typeof cwd === "string" && cwd); } catch { desktopProjects = []; }
-      if (desktopProjects.length) {
-        const allowed = new Set(desktopProjects);
-        const registered = new Set(projects.map((project) => String(project.cwd || "")));
-        let opened = false;
-        for (const cwd of desktopProjects) {
-          if (registered.has(cwd)) continue;
-          try { await this.rpc("projects.open", { cwd }); opened = true; } catch { /* stale/non-directory entry */ }
-        }
-        if (opened) projects = await this.rpc("projects.list");
-        projects = projects.filter((project) => allowed.has(String(project.cwd || "")));
+      // Never fall back to the Host registry here: it may contain projects
+      // discovered by an older MonoPad or stale historical entries. An empty
+      // desktop registry means the MonoCode workspace currently has no projects.
+      const allowed = new Set(desktopProjects);
+      const registered = new Set(projects.map((project) => String(project.cwd || "")));
+      let opened = false;
+      for (const cwd of desktopProjects) {
+        if (registered.has(cwd)) continue;
+        try { await this.rpc("projects.open", { cwd }); opened = true; } catch { /* stale/non-directory entry */ }
       }
+      if (opened) projects = await this.rpc("projects.list");
+      projects = projects.filter((project) => allowed.has(String(project.cwd || "")));
     }
     // A deleted project/worktree can remain in the Host history by design.
     // It must not remain in the live workspace rail after a refresh.
