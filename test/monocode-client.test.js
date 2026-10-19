@@ -2,8 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
-import { MonoCodeClient } from "../server/monocode-client.js";
+import { MonoCodeClient, discoverMonoCodeProjects } from "../server/monocode-client.js";
+
+test("mirrors the active MonoCode workspace, not historical session projects", () => {
+  const root = mkdtempSync(join(tmpdir(), "monopad-workspace-"));
+  const active = join(root, "smarttpm");
+  const pinned = join(root, "smarttpm-auditoria-lib");
+  const projects = [active, pinned, join(root, "smarttpm-doc-contabil"), join(root, "smarttpm-pep-fundos"), join(root, "smarttpm-provisao")];
+  for (const cwd of projects) mkdirSync(cwd, { recursive: true });
+  const oldSessionProject = join(root, "deleted-project");
+  mkdirSync(oldSessionProject, { recursive: true });
+  const dbPath = join(root, "monocode.db");
+  const db = new DatabaseSync(dbPath);
+  db.exec("CREATE TABLE sessions (cwd TEXT NOT NULL); CREATE TABLE workspace_snapshot (snapshot_json TEXT NOT NULL, updated_at INTEGER NOT NULL);");
+  db.prepare("INSERT INTO sessions (cwd) VALUES (?)").run(oldSessionProject);
+  db.prepare("INSERT INTO workspace_snapshot (snapshot_json, updated_at) VALUES (?, ?)").run(JSON.stringify({ projectCwd: active, projectReturnTargets: projects.slice(1).map((projectPath) => ({ projectPath })), projectTerminals: [] }), Date.now());
+  db.close();
+  try { assert.deepEqual(new Set(discoverMonoCodeProjects(dbPath)), new Set(projects)); } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test("bootstraps live projects and filters deleted worktrees", async () => {
   const calls=[];

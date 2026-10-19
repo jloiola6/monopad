@@ -762,3 +762,27 @@ html[data-theme="light"] #file-viewer.file-viewer-screen .file-viewer-body, html
   #file-viewer.file-viewer-screen .file-viewer-search input { width:min(31vw,150px); }
   #file-viewer.file-viewer-screen .file-viewer-actions .ghost-button { min-height:40px; padding:0 10px; }
 }
+
+
+/* MonoCode workspace rail: readable project names with a restrained entrance effect. */
+.project { animation: project-rail-in .28s ease both; animation-delay: calc(var(--project-index, 0) * 35ms); }
+.project-heading-row { position:relative; min-height:58px; background:linear-gradient(90deg,color-mix(in srgb,var(--project-color) 5%,transparent),transparent 78%); transition:background .2s ease, transform .2s ease; }
+.project-heading-row:hover { background:linear-gradient(90deg,color-mix(in srgb,var(--project-color) 12%,transparent),transparent 84%); }
+.project-button { padding-top:8px; padding-bottom:8px; transition:color .2s ease, transform .15s ease; }
+.project-button:active { transform:scale(.99); }
+.project-button b { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; line-height:1.22; }
+.project-mascot { box-shadow:0 5px 16px color-mix(in srgb,var(--project-color) 18%,transparent); transition:transform .2s ease, box-shadow .2s ease; }
+.project-heading-row:hover .project-mascot { transform:translateY(-1px) scale(1.04); box-shadow:0 8px 20px color-mix(in srgb,var(--project-color) 28%,transparent); }
+@keyframes project-rail-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+@media (min-width:901px) {
+  .app-shell { grid-template-columns:minmax(320px,340px) minmax(0,1fr); }
+  .sidebar { width:100%; }
+  .project-heading-row { min-height:62px; }
+  .project-button { min-height:62px; padding-left:14px; }
+}
+@media (max-width:900px) {
+  .sidebar { width:min(92vw,390px); }
+  .project-heading-row { min-height:60px; }
+  .project-button { min-height:60px; padding-left:14px; }
+}
+@media (prefers-reduced-motion: reduce) { .project { animation:none; } }

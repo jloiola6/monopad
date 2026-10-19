@@ -127,8 +127,8 @@ function injectSkillPrompt(text, skills) {
   return `${header}\n\n${bodies}\n\n---\n\n${text}`;
 }
 
-function discoverMonoCodeProjects() {
-  const desktopPath = process.env.MONOCODE_DESKTOP_DB || join(homedir(), ".local", "share", "com.monocode.desktop", "monocode.db");
+export function discoverMonoCodeProjects(databasePath = "") {
+  const desktopPath = databasePath || process.env.MONOCODE_DESKTOP_DB || join(homedir(), ".local", "share", "com.monocode.desktop", "monocode.db");
   if (!existsSync(desktopPath)) return [];
   let desktop;
   try { desktop = new DatabaseSync(desktopPath); } catch { return []; }
@@ -139,7 +139,9 @@ function discoverMonoCodeProjects() {
     try { if (statSync(cwd).isDirectory()) found.add(cwd); } catch { /* stale desktop entry */ }
   };
   try {
-    for (const row of desktop.prepare("SELECT DISTINCT cwd FROM sessions WHERE cwd IS NOT NULL").all()) add(row.cwd);
+    // The desktop workspace snapshot is the canonical project rail. Historical
+    // sessions intentionally do not participate: they can outlive a project
+    // that the user already removed from MonoCode.
     for (const row of desktop.prepare("SELECT snapshot_json FROM workspace_snapshot ORDER BY updated_at DESC LIMIT 1").all()) {
       let snapshot;
       try { snapshot = JSON.parse(String(row.snapshot_json || "{}")); } catch { continue; }

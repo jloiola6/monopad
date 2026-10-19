@@ -180,14 +180,14 @@ function saveProjectStyle(){
 }
 function renderProjects() {
   const nav=$("#project-list");nav.replaceChildren();
-  for(const project of state.data.projects){
-    const section=document.createElement("section");section.className="project";
+  for(const [projectIndex, project] of state.data.projects.entries()){
+    const section=document.createElement("section");section.className="project";section.style.setProperty("--project-index",String(projectIndex));
     const sessions=state.data.sessions[project.id] || [];
     const headingRow=document.createElement("div");headingRow.className="project-heading-row";
     const visual=projectVisual(project);
     section.style.setProperty("--project-color",visual.color);
     section.dataset.projectId=project.id;
-    const heading=document.createElement("button");heading.className="project-button";heading.innerHTML="<span class=\"project-mascot\" aria-hidden=\"true\"></span><span class=\"project-icon\" data-icon=\"folder\"></span><b></b><small>"+sessions.length+"</small>";hydrateIcons(heading);const mascot=heading.querySelector(".project-mascot");if(String(visual.mascot||"").startsWith("icon:"))mascot.innerHTML=uiIcon(String(visual.mascot).slice(5));else mascot.textContent=visual.mascot;heading.querySelector("b").textContent=project.name;
+    const heading=document.createElement("button");heading.className="project-button";heading.innerHTML="<span class=\"project-mascot\" aria-hidden=\"true\"></span><span class=\"project-icon\" data-icon=\"folder\"></span><b></b><small>"+sessions.length+"</small>";hydrateIcons(heading);const mascot=heading.querySelector(".project-mascot");if(String(visual.mascot||"").startsWith("icon:"))mascot.innerHTML=uiIcon(String(visual.mascot).slice(5));else mascot.textContent=visual.mascot;heading.querySelector("b").textContent=project.name;heading.title=project.name;
     const styleButton=document.createElement("button");styleButton.className="project-style-button";styleButton.type="button";styleButton.innerHTML=uiIcon("settings");styleButton.title="Personalizar "+project.name;styleButton.setAttribute("aria-label","Personalizar "+project.name);styleButton.addEventListener("click",(event)=>{event.stopPropagation();openProjectStyle(project);});
     const createButton=document.createElement("button");createButton.className="new-session-button";createButton.innerHTML=uiIcon("plus");createButton.title="Nova sessão em "+project.name;createButton.setAttribute("aria-label","Nova sessão em "+project.name);createButton.addEventListener("click",()=>createSession(project));headingRow.append(heading,styleButton,createButton);section.append(headingRow);
     const list=document.createElement("div");list.className="project-sessions";
